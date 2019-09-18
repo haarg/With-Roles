@@ -12,7 +12,7 @@ my %COMPOSITE_KEY;
 
 my $role_suffix = 'A000';
 sub _composite_name {
-  my ($base, @roles) = @_;
+  my ($base, $role_base, @roles) = @_;
   my $key = join('+', $base, map join('|', @$_), @roles);
   return $COMPOSITE_NAME{$key}
     if exists $COMPOSITE_NAME{$key};
@@ -21,7 +21,7 @@ sub _composite_name {
   for my $roles (@roles) {
     # this creates the potential for ambiguity, but it's unlikely to happen and
     # we will keep the resulting composite
-    my @short_names = map /\A\Q$base\E(?:::Role)::(.*)/ ? $1 : $_, @$roles;
+    my @short_names = map /\A\Q$role_base\E::(.*)/ ? $1 : $_, @$roles;
     $new_name .= '__WITH__' . join '__AND__', @short_names;
   }
 
@@ -69,11 +69,13 @@ sub with::roles {
 
   my ($orig_base, @base_roles) = @{ $BASE{$base} || [$base] };
 
-  s/^\+/${orig_base}::Role::/ for @roles;
+  my $role_base = $self->can('ROLE_BASE') ? $self->ROLE_BASE : $orig_base.'::Role';
+
+  s/^\+/${role_base}::/ for @roles;
 
   my @all_roles = (@base_roles, [ @roles ]);
 
-  my $new = _composite_name($orig_base, @all_roles);
+  my $new = _composite_name($orig_base, $role_base, @all_roles);
 
   if (!exists $BASE{$new}) {
     my $meta;

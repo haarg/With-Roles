@@ -35,6 +35,18 @@ use With::Roles;
 }
 
 {
+  package My::Role::Tiny::Class2;
+  sub ROLE_BASE { 'MyRoles' }
+  sub new { bless {}, shift }
+}
+
+{
+  package MyRoles::Role;
+  use Role::Tiny;
+  sub from_role { __PACKAGE__ }
+}
+
+{
   my $o = My::Role::Tiny::Class->with::roles('My::Role::Tiny::Role')->new;
   ok $o->can('from_role');
   ok !My::Role::Tiny::Class->can('from_role');
@@ -64,6 +76,12 @@ use With::Roles;
   my $c2 = $c->with::roles('+Role2');
   ok $c2->can('from_role');
   ok $c2->can('from_role2');
+}
+
+{
+  my $c = My::Role::Tiny::Class2->with::roles('+Role');
+  ok $c->can('from_role');
+  is $c->from_role, 'MyRoles::Role';
 }
 
 done_testing;
