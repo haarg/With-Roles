@@ -7,143 +7,154 @@ $VERSION =~ tr/_//d;
 
 use Carp qw(croak);
 
-my %WITH;
+my %COMPOSITE_NAME;
 
-sub with::roles {
+my $role_suffix = 'A000';
+sub _composite_name {
   my ($base, @roles) = @_;
-  return $base
-    if !@roles;
-  my $class = ref $base || $base;
-  my $with_key = join('|', $class, @roles);
-  if (my $new = $WITH{$with_key}) {
-    if (ref $base) {
-      return bless $_[0], $new;
-    }
-    return $new;
+  my $key = join('|', $base, @roles);
+  return $COMPOSITE_NAME{$key}
+    if exists $COMPOSITE_NAME{$key};
+
+  my $new_name = join(
+    '__WITH__', $base, join '__AND__', @roles
+  );
+
+  if (length($new_name) > 252) {
+    my $abbrev = substr $new_name, 0, 250 - length $role_suffix;
+    $abbrev =~ s/(?<!:):$//;
+    $new_name = $abbrev.'__'.$role_suffix++;
   }
 
-  my $new;
-  my $meta;
-  if (
-    $INC{'Moo.pm'}
-    and Moo->_accessor_maker_for($class)
-  ) {
-    require Moo::Role;
-    my $meth = ref $base ? 'apply_roles_to_object' : 'create_class_with_roles';
-    $new = Moo::Role->$meth($_[0], @roles);
-  }
-  elsif (
-    $INC{'Moo/Role.pm'}
-    and Moo::Role->is_role($base)
-  ) {
-    $new = Moo::Role->_composite_name($base, @roles);
-    if (Moo::Role->can('make_role')) {
-      Moo::Role->make_role($new);
-    }
-    else {
-      my $e;
-      {
-        local $@;
-        eval qq{
-          package $new;
-          use Moo::Role;
-          no Moo::Role;
-          1;
-        } or $e = $@;
-      }
-      die $e if defined $e;
-    }
-    Moo::Role->apply_roles_to_package($new, $base);
-    Moo::Role->apply_roles_to_package($new, @roles);
-  }
-  elsif (
-    $INC{'Class/MOP.pm'}
-    and $meta = Class::MOP::class_of($base)
-    and $meta->isa('Moose::Meta::Role')
-  ) {
-    $new = Moose::Meta::Role->create_anon_role(roles => [ $base => {} ], cache => 1)->name;
-    Moose::Util::apply_all_roles($new, @roles);
-  }
-  elsif (
-    $INC{'Class/MOP.pm'}
-    and $meta = Class::MOP::class_of($class)
-    and $meta->isa('Class::MOP::Class')
-  ) {
-    require Moose::Util;
-    if (ref $base) {
-      Moose::Util::apply_all_roles($base, @roles);
-      $new = $base;
-    }
-    else {
-      $new = Moose::Util::with_traits($base, @roles);
-    }
-  }
-  elsif (
-    Mouse::Util->can('find_meta')
-    and $meta = Mouse::Util::find_meta($base)
-    and $meta->isa('Mouse::Meta::Role')
-  ) {
-    require Mouse::Util;
-    $new = Mouse::Meta::Role->create_anon_role(roles => [ $base => {} ], cache => 1)->name;
-    Mouse::Util::apply_all_roles($new, @roles);
-  }
-  elsif (
-    Mouse::Util->can('find_meta')
-    and $meta = Mouse::Util::find_meta($class)
-    and $meta->isa('Mouse::Meta::Class')
-  ) {
-    if (ref $base) {
-      require Mouse::Util;
-      Mouse::Util::apply_all_roles($base, @roles);
-      $new = $base;
-    }
-    else {
-      $new = (ref $meta)->create_anon_class(
-        superclasses => [$base],
-        roles        => [@roles],
-        cache        => 1,
-      )->name;
-    }
-  }
-  elsif (
-    $INC{'Role/Tiny.pm'}
-    and Role::Tiny->is_role($base)
-  ) {
-    $new = Role::Tiny->_composite_name($base, @roles);
-    if (Role::Tiny->can('make_role')) {
-      Role::Tiny->make_role($new);
-    }
-    else {
-      my $e;
-      {
-        local $@;
+  return $COMPOSITE_NAME{$key} = $new_name;
+}
+
+sub _gen {
+  my ($pack, $type, @ops) = @_;
+  my $e;
+  {
+    local $@;
+    no strict 'refs';
+    local *{"${pack}::${_}"}
+      for qw(with extends requires has around after before);
+
+    eval sprintf <<'END_CODE', $pack, $type or $e = $@;
+      package %s;
+      use %s;
+      while (@ops) {
         no strict 'refs';
-        local *{"${new}::${_}"}
-          for keys %{"${new}::"};
-        eval qq{
-          package $new;
-          use Role::Tiny;
-          1;
-        } or $e = $@;
+        my ($cmd, $args) = splice @ops, 0, 2;
+        &$cmd(@$args);
       }
-      die $e if defined $e;
+      1;
+END_CODE
+  }
+  die $e if defined $e;
+}
+
+my %BASE;
+sub with::roles {
+  my ($self, @roles) = @_;
+  return $self
+    if !@roles;
+
+  my $base = ref $self || $self;
+
+  ($base, my @base_roles) = @{ $BASE{$base} || [$base] };
+
+  @roles = (@base_roles, map /^\+(.*)/ ? "${base}::Role::${1}" : $_, @roles);
+
+  my $new = _composite_name($base, @roles);
+
+  if (!exists $BASE{$new}) {
+    my $meta;
+    if (
+      $INC{'Moo.pm'}
+      and Moo->_accessor_maker_for($base)
+    ) {
+      _gen($new, 'Moo',
+        extends => [ $base ],
+        with    => [ @roles ],
+      );
     }
-    Role::Tiny->apply_roles_to_package($new, $base);
-    Role::Tiny->apply_roles_to_package($new, @roles);
-  }
-  elsif (
-    $INC{'Role/Tiny.pm'}
-    and !grep !Role::Tiny->is_role($_), @roles
-  ) {
-    my $meth = ref $base ? 'apply_roles_to_object' : 'create_class_with_roles';
-    $new = Role::Tiny->$meth($_[0], @roles);
-  }
-  else {
-    croak "Can't determine class or role type of $class!";
+    elsif (
+      $INC{'Moo/Role.pm'}
+      and Moo::Role->is_role($base)
+    ) {
+      _gen($new, 'Moo::Role',
+        with => [ $base ],
+        with => [ @roles ],
+      );
+    }
+    elsif (
+      $INC{'Class/MOP.pm'}
+      and $meta = Class::MOP::class_of($base)
+      and $meta->isa('Class::MOP::Class')
+    ) {
+      _gen($new, 'Moose',
+        extends => [ $base ],
+        with    => [ @roles ],
+      );
+    }
+    elsif (
+      $INC{'Class/MOP.pm'}
+      and $meta = Class::MOP::class_of($base)
+      and $meta->isa('Moose::Meta::Role')
+    ) {
+      _gen($new, 'Moose::Role',
+        with => [ $base ],
+        with => [ @roles ],
+      );
+    }
+    elsif (
+      defined &Mouse::Util::find_meta
+      and $meta = Mouse::Util::find_meta($base)
+      and $meta->isa('Mouse::Meta::Class')
+    ) {
+      _gen($new, 'Mouse',
+        extends => [ $base ],
+        with    => [ @roles ],
+      );
+    }
+    elsif (
+      defined &Mouse::Util::find_meta
+      and $meta = Mouse::Util::find_meta($base)
+      and $meta->isa('Mouse::Meta::Role')
+    ) {
+      _gen($new, 'Mouse::Role',
+        with => [ $base ],
+        with => [ @roles ],
+      );
+    }
+    elsif (
+      $INC{'Role/Tiny.pm'}
+      and Role::Tiny->is_role($base)
+    ) {
+      _gen($new, 'Role::Tiny',
+        with => [ $base ],
+        with => [ @roles ],
+      );
+    }
+    elsif (
+      $INC{'Role/Tiny.pm'}
+      and !grep !Role::Tiny->is_role($_), @roles
+    ) {
+      no strict 'refs';
+      @{"${new}::ISA"} = ($base);
+      _gen($new, 'Role::Tiny::With',
+        with => [ @roles ],
+      );
+    }
+    else {
+      croak "Can't determine class or role type of $base!";
+    }
   }
 
-  my $new_package = ref $new || $new;
-  $WITH{$with_key} = $new_package;
+  $BASE{$new} = [$base, @roles];
+
+  if (ref $self) {
+    return bless $_[0], $new;
+  }
 
   return $new;
 }
