@@ -12,13 +12,17 @@ my %COMPOSITE_NAME;
 my $role_suffix = 'A000';
 sub _composite_name {
   my ($base, @roles) = @_;
-  my $key = join('|', $base, @roles);
+  my $key = join('+', $base, map join('|', @$_), @roles);
   return $COMPOSITE_NAME{$key}
     if exists $COMPOSITE_NAME{$key};
 
-  my $new_name = join(
-    '__WITH__', $base, join '__AND__', @roles
-  );
+  my $new_name = $base;
+  for my $roles (@roles) {
+    # this creates the potential for ambiguity, but it's unlikely to happen and
+    # we will keep the resulting composite
+    my @short_names = map /\A\Q$base\E(?:::Role)::(.*)/ ? $1 : $_, @$roles;
+    $new_name .= '__WITH__' . join '__AND__', @short_names;
+  }
 
   if (length($new_name) > 252) {
     my $abbrev = substr $new_name, 0, 250 - length $role_suffix;
@@ -60,11 +64,13 @@ sub with::roles {
 
   my $base = ref $self || $self;
 
-  ($base, my @base_roles) = @{ $BASE{$base} || [$base] };
+  my ($orig_base, @base_roles) = @{ $BASE{$base} || [$base] };
 
-  @roles = (@base_roles, map /^\+(.*)/ ? "${base}::Role::${1}" : $_, @roles);
+  s/^\+/${orig_base}::Role::/ for @roles;
 
-  my $new = _composite_name($base, @roles);
+  my @all_roles = (@base_roles, [ @roles ]);
+
+  my $new = _composite_name($orig_base, @all_roles);
 
   if (!exists $BASE{$new}) {
     my $meta;
@@ -74,7 +80,7 @@ sub with::roles {
     ) {
       _gen($new, 'Moo',
         extends => [ $base ],
-        with    => [ @roles ],
+        with => [ @roles ],
       );
     }
     elsif (
@@ -93,7 +99,7 @@ sub with::roles {
     ) {
       _gen($new, 'Moose',
         extends => [ $base ],
-        with    => [ @roles ],
+        with => [ @roles ],
       );
     }
     elsif (
@@ -113,7 +119,7 @@ sub with::roles {
     ) {
       _gen($new, 'Mouse',
         extends => [ $base ],
-        with    => [ @roles ],
+        with => [ @roles ],
       );
     }
     elsif (
@@ -146,11 +152,12 @@ sub with::roles {
       );
     }
     else {
+      warn @roles;
       croak "Can't determine class or role type of $base!";
     }
   }
 
-  $BASE{$new} = [$base, @roles];
+  $BASE{$new} = [$orig_base, @all_roles];
 
   if (ref $self) {
     return bless $_[0], $new;

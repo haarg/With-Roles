@@ -62,6 +62,7 @@ use With::Roles;
   my $c = My::Role::Tiny::Class->with::roles('+Role');
   ok $c->can('from_role');
   my $c2 = $c->with::roles('+Role2');
+  ok $c2->can('from_role');
   ok $c2->can('from_role2');
 }
 
