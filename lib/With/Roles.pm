@@ -182,6 +182,8 @@ sub with::roles {
   $BASE{$new} = [$orig_base, @all_roles];
 
   if (ref $self) {
+    # using $_[0] rather than $self, to work around how overload magic is
+    # applied on perl 5.8
     return bless $_[0], $new;
   }
 
