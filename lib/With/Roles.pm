@@ -21,7 +21,15 @@ sub _composite_name {
   for my $roles (@roles) {
     # this creates the potential for ambiguity, but it's unlikely to happen and
     # we will keep the resulting composite
-    my @short_names = map /\A\Q$role_base\E::(.*)/ ? $1 : $_, @$roles;
+    my @short_names = @$roles;
+    for (@short_names) {
+      s/\A\Q$role_base\E:://
+        or s/\A\Q$base\E:://;
+      s/(\A:+|:+\z)/'_' x length($1)/ge;
+      $_ = join '::',
+        map { s/\W/_/g; $_ }
+        split /::/;
+    }
     $new_name .= '__WITH__' . join '__AND__', @short_names;
   }
 
