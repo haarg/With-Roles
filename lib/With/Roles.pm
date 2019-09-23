@@ -67,6 +67,12 @@ END_CODE
   die $e if defined $e;
 }
 
+sub _require {
+  my $package = shift;
+  (my $module = "$package.pm") =~ s{::|'}{/}g;
+  require $module;
+}
+
 my %BASE;
 sub with::roles {
   my ($self, @roles) = @_;
@@ -154,19 +160,22 @@ sub with::roles {
         with => [ @roles ],
       );
     }
-    elsif (
-      $INC{'Role/Tiny.pm'}
-      and !grep !Role::Tiny->is_role($_), @roles
-    ) {
-      no strict 'refs';
-      @{"${new}::ISA"} = ($base);
-      _gen($new, 'Role::Tiny::With',
-        with => [ @roles ],
-      );
-    }
     else {
-      warn @roles;
-      croak "Can't determine class or role type of $base!";
+      _require($_)
+        for @roles;
+      if (
+        $INC{'Role/Tiny.pm'}
+        and !grep !Role::Tiny->is_role($_), @roles
+      ) {
+        no strict 'refs';
+        @{"${new}::ISA"} = ($base);
+        _gen($new, 'Role::Tiny::With',
+          with => [ @roles ],
+        );
+      }
+      else {
+        croak "Can't determine class or role type of $base or @roles!";
+      }
     }
   }
 
