@@ -23,6 +23,10 @@ my %META = (
     },
     develop   => {
       requires => {
+        'Moo' => 0,
+        'Mouse' => 0,
+        'Moose' => 0,
+        'Role::Tiny' => 0,
       },
     },
   },
