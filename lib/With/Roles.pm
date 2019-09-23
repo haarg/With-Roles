@@ -75,6 +75,76 @@ sub _require {
   require $module;
 }
 
+sub _extends {
+  no strict 'refs';
+  my $caller = caller;
+  @{"${caller}::ISA"} = (@_);
+}
+
+sub _detect_type {
+  my ($base, @roles) = @_;
+  my $meta;
+  if (
+    $INC{'Moo/Role.pm'}
+    and Moo::Role->is_role($base)
+  ) {
+    return 'Moo::Role';
+  }
+  elsif (
+    $INC{'Moo.pm'}
+    and Moo->_accessor_maker_for($base)
+  ) {
+    return 'Moo';
+  }
+  elsif (
+    $INC{'Class/MOP.pm'}
+    and $meta = Class::MOP::class_of($base)
+    and $meta->isa('Moose::Meta::Role')
+  ) {
+    return 'Moose::Role';
+  }
+  elsif (
+    $INC{'Class/MOP.pm'}
+    and $meta = Class::MOP::class_of($base)
+    and $meta->isa('Class::MOP::Class')
+  ) {
+    return 'Moose';
+  }
+  elsif (
+    defined &Mouse::Util::find_meta
+    and $meta = Mouse::Util::find_meta($base)
+    and $meta->isa('Mouse::Meta::Role')
+  ) {
+    return 'Mouse::Role';
+  }
+  elsif (
+    defined &Mouse::Util::find_meta
+    and $meta = Mouse::Util::find_meta($base)
+    and $meta->isa('Mouse::Meta::Class')
+  ) {
+    return 'Mouse';
+  }
+  elsif (
+    $INC{'Role/Tiny.pm'}
+    and Role::Tiny->is_role($base)
+  ) {
+    return 'Role::Tiny';
+  }
+  else {
+    _require($_)
+      for grep !($INC{'Role/Tiny.pm'} && Role::Tiny->is_role($_)), @roles;
+    if (
+      $INC{'Role/Tiny.pm'}
+      and !grep !Role::Tiny->is_role($_), @roles
+    ) {
+      return 'Role::Tiny::With';
+    }
+    else {
+      return undef;
+    }
+  }
+}
+
 my %BASE;
 sub with::roles {
   my ($self, @roles) = @_;
@@ -94,91 +164,21 @@ sub with::roles {
   my $new = _composite_name($orig_base, $role_base, @all_roles);
 
   if (!exists $BASE{$new}) {
-    my $meta;
-    if (
-      $INC{'Moo.pm'}
-      and Moo->_accessor_maker_for($base)
-    ) {
-      _gen($new, 'Moo',
-        extends => [ $base ],
-        with => [ @roles ],
-      );
+    my $type = _detect_type($base, @roles);
+    my $set_base = 'extends';
+    if (!defined $type) {
+      croak "Can't determine class or role type of $base or @roles!";
     }
-    elsif (
-      $INC{'Moo/Role.pm'}
-      and Moo::Role->is_role($base)
-    ) {
-      _gen($new, 'Moo::Role',
-        with => [ $base ],
-        with => [ @roles ],
-      );
+    elsif ($type eq 'Role::Tiny::With') {
+      $set_base = __PACKAGE__.'::_extends';
     }
-    elsif (
-      $INC{'Class/MOP.pm'}
-      and $meta = Class::MOP::class_of($base)
-      and $meta->isa('Class::MOP::Class')
-    ) {
-      _gen($new, 'Moose',
-        extends => [ $base ],
-        with => [ @roles ],
-      );
+    elsif ($type =~ /Role/) {
+      $set_base = 'with';
     }
-    elsif (
-      $INC{'Class/MOP.pm'}
-      and $meta = Class::MOP::class_of($base)
-      and $meta->isa('Moose::Meta::Role')
-    ) {
-      _gen($new, 'Moose::Role',
-        with => [ $base ],
-        with => [ @roles ],
-      );
-    }
-    elsif (
-      defined &Mouse::Util::find_meta
-      and $meta = Mouse::Util::find_meta($base)
-      and $meta->isa('Mouse::Meta::Class')
-    ) {
-      _gen($new, 'Mouse',
-        extends => [ $base ],
-        with => [ @roles ],
-      );
-    }
-    elsif (
-      defined &Mouse::Util::find_meta
-      and $meta = Mouse::Util::find_meta($base)
-      and $meta->isa('Mouse::Meta::Role')
-    ) {
-      _gen($new, 'Mouse::Role',
-        with => [ $base ],
-        with => [ @roles ],
-      );
-    }
-    elsif (
-      $INC{'Role/Tiny.pm'}
-      and Role::Tiny->is_role($base)
-    ) {
-      _gen($new, 'Role::Tiny',
-        with => [ $base ],
-        with => [ @roles ],
-      );
-    }
-    else {
-      _require($_)
-        for @roles;
-      if (
-        $INC{'Role/Tiny.pm'}
-        and !grep !Role::Tiny->is_role($_), @roles
-      ) {
-        no strict 'refs';
-        @{"${new}::ISA"} = ($base);
-        _gen($new, 'Role::Tiny::With',
-          with => [ @roles ],
-        );
-      }
-      else {
-        croak "Can't determine class or role type of $base or @roles!";
-      }
-    }
+    _gen($new, $type,
+      $set_base => [ $base ],
+      with      => [ @roles ],
+    );
   }
 
   $BASE{$new} = [$orig_base, @all_roles];
