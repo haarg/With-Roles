@@ -53,16 +53,18 @@ sub _gen {
     local *{"${pack}::${_}"}
       for qw(with extends requires has around after before);
 
-    eval sprintf <<'END_CODE', $pack, $type or $e = $@;
-      package %s;
-      use %s;
-      while (@ops) {
-        no strict 'refs';
-        my ($cmd, $args) = splice @ops, 0, 2;
-        &$cmd(@$args);
-      }
-      1;
-END_CODE
+    my $code = join('',
+      "package $pack;\n",
+      (defined $type ? "use $type;\n" : ()),
+      (
+        map "$ops[$_-1](\@{\$ops[$_]});\n",
+        map $_*2+1,
+        0 .. (@ops/2-1)
+      ),
+      "1;\n",
+    );
+
+    eval $code or $e = $@;
   }
   die $e if defined $e;
 }
