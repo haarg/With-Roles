@@ -200,9 +200,25 @@ With::Roles - Create role/class/object with composed roles
 =head1 SYNOPSIS
 
   use With::Roles;
-  my $obj = My::Class->with::roles('My::Role')->new;
+  # create class inheriting from My::Class, with My::Role applied
+  my $class = My::Class->with::roles('My::Role');
+
+  # create a role with My::Role, then Another::Role applied
+  my $role = My::Role->with::roles('Another::Role');
+
+  # generated role can be applied
+  my $obj = My::Class->with::roles($role)->new;
+
+  # apply role to object
+  $obj->with::roles('Yet::Another::Role');
+
+  # applies the role My::Class::Role::My::Role
+  my $another_class = My::Class->with::roles('+My::Role');
 
 =head1 DESCRIPTION
+
+This module provides a easy to use global function that can be used on any
+package to create a new package with a set of roles applied.
 
 When used on classes, generates a subclass with the given roles applied.
 
@@ -210,7 +226,16 @@ When used on roles, generates a new role with the base and given roles applied.
 
 When used on objects, applies the roles to the object and returns the object.
 
-Compatible with Moose, Moo, Mouse, and Role::Tiny roles and classes.
+Compatible with L<Moose>, L<Moo>, L<Mouse>, and L<Role::Tiny> roles and classes.
+
+The generated packages will have names based on the original classes and roles.
+The exact form of the generated names should not be relied on, but should aid
+with debugging.
+
+A shorthand of C<+RoleName> can be used for roles named like
+C<MyClass::Role::RoleName>.  Additional roles applied will continue to base
+the name on the original class.  The package can also provide a method
+C<ROLE_BASE> to return a prefix to use other than C<MyClass::Role>.
 
 =head1 AUTHOR
 
