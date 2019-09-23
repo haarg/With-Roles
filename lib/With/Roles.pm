@@ -8,6 +8,7 @@ $VERSION =~ tr/_//d;
 use Carp qw(croak);
 
 my %COMPOSITE_NAME;
+my %COMPOSITE_KEY;
 
 my $role_suffix = 'A000';
 sub _composite_name {
@@ -24,11 +25,13 @@ sub _composite_name {
     $new_name .= '__WITH__' . join '__AND__', @short_names;
   }
 
-  if (length($new_name) > 252) {
+  if ($COMPOSITE_KEY{$new_name} || length($new_name) > 252) {
     my $abbrev = substr $new_name, 0, 250 - length $role_suffix;
     $abbrev =~ s/(?<!:):$//;
     $new_name = $abbrev.'__'.$role_suffix++;
   }
+
+  $COMPOSITE_KEY{$new_name} = $key;
 
   return $COMPOSITE_NAME{$key} = $new_name;
 }
