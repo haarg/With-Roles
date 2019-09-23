@@ -85,7 +85,7 @@ sub with::roles {
 
   my $role_base = $self->can('ROLE_BASE') ? $self->ROLE_BASE : $orig_base.'::Role';
 
-  s/^\+/${role_base}::/ for @roles;
+  s/\A\+/${role_base}::/ for @roles;
 
   my @all_roles = (@base_roles, [ @roles ]);
 
