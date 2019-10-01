@@ -2,7 +2,7 @@ package With::Roles;
 use strict;
 use warnings;
 
-our $VERSION = '0.001_000';
+our $VERSION = '0.001000';
 $VERSION =~ tr/_//d;
 
 use Carp qw(croak);
