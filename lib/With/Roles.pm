@@ -17,15 +17,15 @@ sub _composite_name {
   return $COMPOSITE_NAME{$key}
     if exists $COMPOSITE_NAME{$key};
 
+  my ($cut) = map qr/$_/, join '|', map quotemeta, @$role_base, $base;
+
   my $new_name = $base;
   for my $roles (@roles) {
     # this creates the potential for ambiguity, but it's unlikely to happen and
     # we will keep the resulting composite
     my @short_names = @$roles;
     for (@short_names) {
-      s/\A\Q$role_base\E:://
-        or s/\A\Q$base\E:://;
-      s/(\A:+|:+\z)/'_' x length($1)/ge;
+      s/\A${cut}::/::/;
       $_ = join '::',
         map { s/\W/_/g; $_ }
         split /::/;
@@ -161,7 +161,7 @@ sub with::roles {
 
   my @all_roles = (@base_roles, [ @roles ]);
 
-  my $new = _composite_name($orig_base, $role_base, @all_roles);
+  my $new = _composite_name($orig_base, [ $role_base ], @all_roles);
 
   if (!exists $BASE{$new}) {
     my $type = _detect_type($base, @roles);
