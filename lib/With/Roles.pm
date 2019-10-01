@@ -164,17 +164,13 @@ sub with::roles {
   my $new = _composite_name($orig_base, [ $role_base ], @all_roles);
 
   if (!exists $BASE{$new}) {
-    my $type = _detect_type($base, @roles);
-    my $set_base = 'extends';
-    if (!defined $type) {
-      croak "Can't determine class or role type of $base or @roles!";
-    }
-    elsif ($type eq 'Role::Tiny::With') {
-      $set_base = __PACKAGE__.'::_extends';
-    }
-    elsif ($type =~ /Role/) {
-      $set_base = 'with';
-    }
+    my $type = _detect_type($base, @roles)
+      or croak "Can't determine class or role type of $base or @roles!";
+
+    my $set_base
+      = $type eq 'Role::Tiny::With' ? __PACKAGE__.'::_extends'
+      : $type =~ /Role/             ? 'with'
+                                    : 'extends';
     _gen($new, $type,
       $set_base => [ $base ],
       with      => [ @roles ],
