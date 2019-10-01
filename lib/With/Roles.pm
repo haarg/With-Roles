@@ -131,7 +131,7 @@ sub _detect_type {
     return 'Role::Tiny';
   }
   else {
-    _require($_)
+    eval { _require($_) }
       for grep !($INC{'Role/Tiny.pm'} && Role::Tiny->is_role($_)), @roles;
     if (
       $INC{'Role/Tiny.pm'}
