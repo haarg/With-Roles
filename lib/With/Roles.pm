@@ -238,6 +238,8 @@ A shorthand of C<+RoleName> can be used for roles named like
 C<MyClass::Role::RoleName>.  Additional roles applied will continue to base
 the name on the original class.  The package can also provide a method
 C<ROLE_BASE> to return a prefix to use other than C<MyClass::Role>.
+C<ROLE_BASE> support is experimental, and may be removed or changed in a future
+version.
 
 =head1 AUTHOR
 
