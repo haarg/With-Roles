@@ -1,4 +1,6 @@
 Revision history for With-Roles
 
+  - fix MRO of generated classes not matching original class
+
 0.001000 - 2019-10-01
   - initial release
