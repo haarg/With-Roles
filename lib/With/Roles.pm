@@ -81,6 +81,13 @@ sub _extends {
   @{"${caller}::ISA"} = (@_);
 }
 
+sub _copy_mro {
+  my $base = shift;
+  my $caller = caller;
+  mro::set_mro($caller, mro::get_mro($base))
+    if defined &mro::set_mro;
+}
+
 sub _detect_type {
   my ($base, @roles) = @_;
   my $meta;
@@ -167,14 +174,23 @@ sub with::roles {
     my $type = _detect_type($base, @roles)
       or croak "Can't determine class or role type of $base or @roles!";
 
-    my $set_base
-      = $type eq 'Role::Tiny::With' ? __PACKAGE__.'::_extends'
-      : $type =~ /Role/             ? 'with'
-                                    : 'extends';
-    _gen($new, $type,
-      $set_base => [ $base ],
-      with      => [ @roles ],
-    );
+    my @ops;
+
+    if ($type eq 'Role::Tiny::With') {
+      push @ops, __PACKAGE__.'::_extends', [ $base ];
+      push @ops, __PACKAGE__.'::_copy_mro' => [ $base ];
+    }
+    elsif ($type =~ /Role/) {
+      push @ops, with => [ $base ];
+    }
+    else {
+      push @ops, extends => [ $base ];
+      push @ops, __PACKAGE__.'::_copy_mro' => [ $base ];
+    }
+
+    push @ops, with => [ @roles ];
+
+    _gen($new, $type, @ops);
   }
 
   $BASE{$new} = [$orig_base, @all_roles];
