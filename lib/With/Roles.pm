@@ -79,12 +79,13 @@ sub _extends {
   no strict 'refs';
   my $caller = caller;
   @{"${caller}::ISA"} = (@_);
+  _copy_mro($_[0], $caller);
 }
 
 sub _copy_mro {
-  my $base = shift;
-  my $caller = caller;
-  mro::set_mro($caller, mro::get_mro($base))
+  my $source = shift;
+  my $target = shift || caller;
+  mro::set_mro($target, mro::get_mro($source))
     if defined &mro::set_mro;
 }
 
@@ -178,7 +179,6 @@ sub with::roles {
 
     if ($type eq 'Role::Tiny::With') {
       push @ops, __PACKAGE__.'::_extends', [ $base ];
-      push @ops, __PACKAGE__.'::_copy_mro' => [ $base ];
     }
     elsif ($type =~ /Role/) {
       push @ops, with => [ $base ];
