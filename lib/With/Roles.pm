@@ -6,6 +6,7 @@ our $VERSION = '0.001000';
 $VERSION =~ tr/_//d;
 
 use Carp qw(croak);
+use Scalar::Util qw(blessed);
 
 my %COMPOSITE_NAME;
 my %COMPOSITE_KEY;
@@ -155,12 +156,12 @@ sub _detect_type {
 }
 
 my %BASE;
-sub with::roles {
-  my ($self, @roles) = @_;
+sub _add_roles {
+  my ($name_gen, $self, @roles) = @_;
   return $self
     if !@roles;
 
-  my $base = ref $self || $self;
+  my $base = blessed $self || $self;
 
   my ($orig_base, @base_roles) = @{ $BASE{$base} || [$base] };
 
@@ -170,7 +171,7 @@ sub with::roles {
 
   my @all_roles = (@base_roles, [ @roles ]);
 
-  my $new = _composite_name($orig_base, [ $role_base ], @all_roles);
+  my $new = $name_gen->($orig_base, [ $role_base ], @all_roles);
 
   if (!exists $BASE{$new}) {
     my $type = _detect_type($base, @roles)
@@ -196,11 +197,49 @@ sub with::roles {
 
   $BASE{$new} = [$orig_base, @all_roles];
 
-  if (ref $self) {
+  if (blessed $self) {
     # using $_[0] rather than $self, to work around how overload magic is
     # applied on perl 5.8
     return bless $_[0], $new;
   }
+
+  return $new;
+}
+
+sub with::roles {
+  _add_roles(\&_composite_name, @_);
+}
+
+sub With::Roles::AnonCleanup::DESTROY {
+  my $self = shift;
+  my $package = $$self;
+  Symbol::delete_package($package);
+}
+
+my $GEN = 'A000';
+my $cleanups;
+sub with::roles::anon {
+  my ($self, @roles) = @_;
+  if (!blessed $self) {
+    croak "with::roles::anon is only usable on objects!\n";
+  }
+  return $self
+    if !@roles;
+
+  $cleanups ||= do {
+    require Symbol;
+    local $@;
+      eval { require Hash::Util::FieldHash }          ? Hash::Util::FieldHash::fieldhash({})
+    : eval { require Hash::FieldHash }                ? Hash::FieldHash::fieldhash({})
+    : eval { require Hash::Util::FieldHash::Compat }  ? Hash::Util::FieldHash::Compat::fieldhash({})
+    # not mentioning Hash::Util::FieldHash because it's core
+    : croak "with::roles::anon requires Hash::FieldHash or Hash::Util::FieldHash::Compat!";
+  };
+
+  my $class = 'With::Role::Generated::'.$GEN++;
+  my $new = _add_roles(sub { $class }, @_);
+
+  push @{ $cleanups->{$new} }, bless \$class, 'With::Roles::AnonCleanup';
 
   return $new;
 }
