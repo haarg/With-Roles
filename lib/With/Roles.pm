@@ -50,6 +50,7 @@ sub _gen {
   {
     local $@;
     no strict 'refs';
+    no warnings 'once';
     local *{"${pack}::${_}"}
       for qw(with extends requires has around after before);
 
