@@ -48,6 +48,8 @@ my %META = (
   x_breaks => {
   },
   x_authority => 'cpan:HAARG',
+  x_static_install => 1,
+  dynamic_config => 0,
 );
 
 my %MM_ARGS = ();
